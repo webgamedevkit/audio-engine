@@ -1,5 +1,7 @@
 # @webgamekit/audio-engine
 
+> **Beta — not for production.** This package is in early development (v0.x). APIs, behavior, and package structure may change without notice. Do not rely on it in production apps until a stable 1.0 release.
+
 A small, typed Web Audio layer for games and 3D apps. Play sounds by event id, optionally spatialize them with HRTF when a world position is provided, and control loudness through master + category volumes that update live on playing sounds. The core engine is framework-agnostic; React and React Three Fiber helpers are included for typical setups.
 
 ## Install
