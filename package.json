@@ -9,7 +9,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
+    "build:map": "tsup --sourcemap",
+    "dev": "tsup --watch --sourcemap",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -58,6 +59,7 @@
     "@types/react": "^19.1.2",
     "@types/three": "^0.176.0",
     "react": "^19.1.0",
+    "terser": "^5.49.0",
     "three": "^0.176.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",

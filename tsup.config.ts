@@ -9,8 +9,21 @@ export default defineConfig({
   },
   format: ["esm"],
   dts: true,
-  sourcemap: true,
+  minify: "terser",
+  sourcemap: false,
   clean: true,
   treeshake: true,
+  terserOptions: {
+    compress: {
+      passes: 2,
+      drop_debugger: true,
+    },
+    mangle: {
+      toplevel: true,
+    },
+    format: {
+      comments: false,
+    },
+  },
   external: ["react", "react-dom", "zustand", "@react-three/fiber", "three"],
 });
