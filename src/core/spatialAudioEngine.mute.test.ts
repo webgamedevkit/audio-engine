@@ -60,7 +60,7 @@ const createEngine = (
         numberOfChannels: 1,
         sampleRate: 44100,
         getChannelData: () => new Float32Array(100),
-      }) as AudioBuffer,
+      }) as unknown as AudioBuffer,
     getVolumeState,
   });
 
@@ -109,6 +109,7 @@ describe("SpatialAudioEngine mute", () => {
     await engine.play("click");
 
     const source = createBufferSource.mock.results[0]?.value as {
+      start: ReturnType<typeof vi.fn>;
       stop: ReturnType<typeof vi.fn>;
       disconnect: ReturnType<typeof vi.fn>;
     };

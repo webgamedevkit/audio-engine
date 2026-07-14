@@ -1,0 +1,72 @@
+{
+  "name": "@webgamekit/audio-engine",
+  "version": "0.1.0",
+  "description": "Typed Web Audio spatial engine for games and 3D apps with optional React and R3F helpers",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./stores": {
+      "types": "./dist/stores/index.d.ts",
+      "default": "./dist/stores/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    },
+    "./r3f": {
+      "types": "./dist/r3f/index.d.ts",
+      "default": "./dist/r3f/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@react-three/fiber": ">=8",
+    "react": ">=18",
+    "three": ">=0.150",
+    "zustand": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    },
+    "zustand": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@react-three/fiber": "^9.1.2",
+    "@types/react": "^19.1.2",
+    "@types/three": "^0.176.0",
+    "react": "^19.1.0",
+    "three": "^0.176.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2",
+    "zustand": "^5.0.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webgamekit/audio-engine.git"
+  },
+  "license": "MIT"
+}
