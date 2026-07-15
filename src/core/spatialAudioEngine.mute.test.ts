@@ -1,15 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { SpatialAudioEngine } from "./spatialAudioEngine";
-import type { SoundConfig, VolumeState } from "../types";
+import type { VolumeState } from "../types";
 
-type TestEvent = "click" | "explosion";
 type TestCategory = "sfx";
 
-const soundConfigs: Record<TestEvent, SoundConfig<TestCategory>> = {
+const soundConfigs = {
   click: { category: "sfx", volume: 50, spatial: false },
   explosion: { category: "sfx", volume: 80, spatial: false },
-};
+} as const;
 
 const unmutedState: VolumeState<TestCategory> = {
   masterVolume: 50,
@@ -51,7 +50,7 @@ const createEngine = (
   audioContext: AudioContext,
   getVolumeState: () => VolumeState<TestCategory>
 ) =>
-  new SpatialAudioEngine<TestEvent, TestCategory>(audioContext, {
+  new SpatialAudioEngine<typeof soundConfigs, TestCategory>(audioContext, {
     soundConfigs,
     resolveBuffer: async () =>
       ({

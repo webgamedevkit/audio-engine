@@ -34,9 +34,11 @@ export type SoundConfig<TCategory extends string = string> = {
   fadeIn?: number;
   /** Planned fade-out duration in seconds (reserved for future use). */
   fadeOut?: number;
+  /** Single audio file URL for this event. */
+  src?: string;
   /**
    * Optional map of variant name → audio file URL.
-   * Resolvers may pick a key from the play payload (e.g. tower type → shot sample).
+   * Pick a variant via `srcKey` on the play payload (e.g. tower type → shot sample).
    */
   srces?: Record<string, string>;
   /**
@@ -50,6 +52,31 @@ export type SoundConfig<TCategory extends string = string> = {
    */
   pitchSpread?: number;
 };
+
+/** Extracts literal variant keys from a config's `srces` map. */
+type SrcKeysOf<C> = C extends { srces: infer S }
+  ? S extends Record<string, string>
+    ? keyof S & string
+    : never
+  : never;
+
+/**
+ * Play payload shape for a single sound config.
+ * `srcKey` is only present when the config defines `srces`.
+ */
+export type PlayPayloadForConfig<C extends SoundConfig> = {
+  worldPosition?: WorldPosition;
+} & (SrcKeysOf<C> extends never
+  ? { srcKey?: never }
+  : { srcKey?: SrcKeysOf<C> });
+
+/**
+ * Play payload for a specific event, given the full configs map.
+ */
+export type PlayPayloadForEvent<
+  TConfigs extends Record<string, SoundConfig>,
+  TEvent extends keyof TConfigs & string,
+> = PlayPayloadForConfig<TConfigs[TEvent]>;
 
 /**
  * Snapshot of user-facing volume controls used when computing effective gain.
@@ -86,26 +113,26 @@ export type VolumeStoreApi<TCategory extends string = string> = {
 /**
  * Construction options for a typed {@link SpatialAudioEngine}.
  *
- * @typeParam TEvent - String-union (or string) sound / event identifiers.
+ * @typeParam TConfigs - Map of event id → {@link SoundConfig} (use `as const satisfies` for typed `srcKey`).
  * @typeParam TCategory - Consumer-defined volume category string union.
  */
 export type SpatialAudioEngineOptions<
-  TEvent extends string,
+  TConfigs extends Record<string, SoundConfig<TCategory>>,
   TCategory extends string = string,
 > = {
   /** Map of every playable event id to its {@link SoundConfig}. */
-  soundConfigs: Record<TEvent, SoundConfig<TCategory>>;
+  soundConfigs: TConfigs;
   /**
-   * Resolves an {@link AudioBuffer} for a given event (file, procedural, or cached).
+   * Optional override for events without `src` / `srces` (procedural or custom buffers).
    * Return `null` to skip playback.
    *
    * @param ctx - Active Web Audio context used for decoding / synthesis.
    * @param event - Event id being played.
-   * @param data - Optional caller payload (may include `worldPosition`, asset keys, etc.).
+   * @param data - Optional caller payload (may include `worldPosition`, `srcKey`, etc.).
    */
-  resolveBuffer: (
+  resolveBuffer?: (
     ctx: AudioContext,
-    event: TEvent,
+    event: keyof TConfigs & string,
     data?: unknown
   ) => Promise<AudioBuffer | null>;
   /**
@@ -113,6 +140,15 @@ export type SpatialAudioEngineOptions<
    * Called at play time and when live volumes are reapplied.
    */
   getVolumeState: () => VolumeState<TCategory>;
+  /**
+   * Called when a file-backed buffer fails to load or decode.
+   * Playback is skipped silently when this fires.
+   */
+  onLoadError?: (
+    event: keyof TConfigs & string,
+    url: string,
+    error: unknown
+  ) => void;
 };
 
 /**
