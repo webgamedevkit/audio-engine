@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "publish": "npm publish --access public --scope=@webgamedevkit/audio-engine"
   },
   "exports": {
     ".": {
@@ -70,5 +71,8 @@
     "type": "git",
     "url": "https://github.com/webgamedevkit/audio-engine.git"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }
