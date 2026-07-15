@@ -10,12 +10,15 @@ export type WorldPosition = {
   z: number;
 };
 
+/** Resolves a category union from a readonly tuple. */
+type CategoryUnion<T extends readonly string[]> = T[number];
+
 /**
- * Per-event (or per-sound-id) playback configuration consumed by the spatial audio engine.
+ * Single sound config entry shape.
  *
  * @typeParam TCategory - Consumer-defined volume category string union.
  */
-export type SoundConfig<TCategory extends string = string> = {
+export type SoundConfigShape<TCategory extends string = string> = {
   /** Volume channel this sound contributes to. */
   category: TCategory;
   /**
@@ -23,11 +26,6 @@ export type SoundConfig<TCategory extends string = string> = {
    * Defaults to spatial when omitted and a `worldPosition` is present on the play payload.
    */
   spatial?: boolean;
-  /**
-   * Relative loudness within the category, typically `0`–`100`
-   * (divided by `MAX_VOLUME` / 100 before applying category gain).
-   */
-  volume?: number;
   /** When `true`, the buffer source loops until stopped or the engine is disposed. */
   loop?: boolean;
   /** Planned fade-in duration in seconds (reserved for future use). */
@@ -53,6 +51,34 @@ export type SoundConfig<TCategory extends string = string> = {
   pitchSpread?: number;
 };
 
+/**
+ * Map of event id → sound config for a fixed category tuple and event union.
+ */
+export type SoundConfigMap<
+  TCategories extends readonly string[],
+  TEvents extends string
+> = Record<TEvents, SoundConfigShape<CategoryUnion<TCategories>>>;
+
+/**
+ * Per-event playback configuration consumed by the spatial audio engine.
+ *
+ * - One type argument → single config entry (`SoundConfigShape`).
+ * - Two type arguments → full event map for {@link defineSoundConfigs}.
+ *
+ * @typeParam TCategories - Category tuple (`typeof AUDIO_CATEGORIES`) or category union.
+ * @typeParam TEvents - When provided, types a full event map. Omit for a single config entry.
+ */
+export type SoundConfig<
+  TCategories extends readonly string[] | string = string,
+  TEvents extends string = never
+> = [TEvents] extends [never]
+  ? TCategories extends readonly string[]
+    ? SoundConfigShape<CategoryUnion<TCategories>>
+    : SoundConfigShape<TCategories & string>
+  : TCategories extends readonly string[]
+  ? SoundConfigMap<TCategories, TEvents>
+  : Record<TEvents, SoundConfigShape<TCategories & string>>;
+
 /** Extracts literal variant keys from a config's `srces` map. */
 type SrcKeysOf<C> = C extends { srces: infer S }
   ? S extends Record<string, string>
@@ -64,7 +90,7 @@ type SrcKeysOf<C> = C extends { srces: infer S }
  * Play payload shape for a single sound config.
  * `srcKey` is only present when the config defines `srces`.
  */
-export type PlayPayloadForConfig<C extends SoundConfig> = {
+export type PlayPayloadForConfig<C extends SoundConfigShape> = {
   worldPosition?: WorldPosition;
 } & (SrcKeysOf<C> extends never
   ? { srcKey?: never }
@@ -74,8 +100,8 @@ export type PlayPayloadForConfig<C extends SoundConfig> = {
  * Play payload for a specific event, given the full configs map.
  */
 export type PlayPayloadForEvent<
-  TConfigs extends Record<string, SoundConfig>,
-  TEvent extends keyof TConfigs & string,
+  TConfigs extends Record<string, SoundConfigShape>,
+  TEvent extends keyof TConfigs & string
 > = PlayPayloadForConfig<TConfigs[TEvent]>;
 
 /**
@@ -113,12 +139,12 @@ export type VolumeStoreApi<TCategory extends string = string> = {
 /**
  * Construction options for a typed {@link SpatialAudioEngine}.
  *
- * @typeParam TConfigs - Map of event id → {@link SoundConfig} (use `as const satisfies` for typed `srcKey`).
+ * @typeParam TConfigs - Map of event id → {@link SoundConfig} (use {@link defineSoundConfigs} for typed `srcKey`).
  * @typeParam TCategory - Consumer-defined volume category string union.
  */
 export type SpatialAudioEngineOptions<
-  TConfigs extends Record<string, SoundConfig<TCategory>>,
-  TCategory extends string = string,
+  TConfigs extends Record<string, SoundConfigShape<TCategory>>,
+  TCategory extends string = string
 > = {
   /** Map of every playable event id to its {@link SoundConfig}. */
   soundConfigs: TConfigs;

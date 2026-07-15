@@ -1,12 +1,13 @@
 import type {
   PlayPayloadForEvent,
   SoundConfig,
+  SoundConfigShape,
   SpatialAudioEngineOptions,
   VolumeState,
   WorldPosition,
 } from "../types";
 import { preloadSoundConfigs, resolveSoundBuffer } from "./assetResolver";
-import { getCategoryVolume, MAX_VOLUME, toVolumeState } from "./volume";
+import { getCategoryVolume, toVolumeState } from "./volume";
 
 /** Default half-range for randomized playback rate when config omits `pitchSpread`. */
 const DEFAULT_PITCH_SPREAD = 0.05;
@@ -64,8 +65,6 @@ type PlayingSound<TCategory extends string> = {
   panner?: PannerNode;
   /** Category used when recomputing gain from {@link VolumeState}. */
   category: TCategory;
-  /** Normalized base volume from config (`0`–`1`) before category multipliers. */
-  baseVolume: number;
 };
 
 /**
@@ -79,7 +78,7 @@ type PlayingSound<TCategory extends string> = {
  * @typeParam TCategory - Consumer-defined volume category string union.
  */
 export class SpatialAudioEngine<
-  TConfigs extends Record<string, SoundConfig<TCategory>>,
+  TConfigs extends Record<string, SoundConfigShape<TCategory>>,
   TCategory extends string = string,
 > {
   /** Shared Web Audio context used for all nodes owned by this engine. */
@@ -236,12 +235,11 @@ export class SpatialAudioEngine<
       }
 
       const gainNode = this.audioContext.createGain();
-      const baseVolume = (config.volume ?? MAX_VOLUME) / MAX_VOLUME;
       const categoryVolume = getCategoryVolume(
         toVolumeState(this.getVolumeState()),
         config.category
       );
-      gainNode.gain.value = baseVolume * categoryVolume;
+      gainNode.gain.value = categoryVolume;
 
       const worldPos = getWorldPositionFromPayload(data);
       const useSpatial = config.spatial !== false && worldPos !== null;
@@ -283,7 +281,6 @@ export class SpatialAudioEngine<
         gainNode,
         panner,
         category: config.category,
-        baseVolume,
       });
 
       source.onended = () => {
@@ -313,7 +310,7 @@ export class SpatialAudioEngine<
 
     this.playingSounds.forEach((sound) => {
       const categoryVolume = getCategoryVolume(volumeState, sound.category);
-      sound.gainNode.gain.value = sound.baseVolume * categoryVolume;
+      sound.gainNode.gain.value = categoryVolume;
     });
   };
 

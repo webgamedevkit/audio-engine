@@ -6,8 +6,8 @@ import type { VolumeState } from "../types";
 type TestCategory = "sfx";
 
 const soundConfigs = {
-  click: { category: "sfx", volume: 50, spatial: false },
-  explosion: { category: "sfx", volume: 80, spatial: false },
+  click: { category: "sfx", spatial: false },
+  explosion: { category: "sfx", spatial: false },
 } as const;
 
 const unmutedState: VolumeState<TestCategory> = {

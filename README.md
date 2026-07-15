@@ -18,43 +18,47 @@ npm install react @react-three/fiber three
 
 ## Quick start
 
-### 1. Volume store
+### 1. Define a volume store
+
+It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle
 
 ```ts
-import { createAudioVolumeStore } from "@webgamedevkit/audio-engine/stores";
+import {
+  createAudioVolumeStore,
+  localStoragePersist,
+} from "@webgamedevkit/audio-engine/stores";
 
-const AUDIO_CATEGORIES = ["sfx", "music"] as const;
+// List of categories you want to have a separate volume value
+const AUDIO_CATEGORIES = ["sfx", "music"] as const; 
 
 export const useAudioStore = createAudioVolumeStore({
-  persistKey: "my-app-audio-settings",
   categories: AUDIO_CATEGORIES,
+  // Saves values to localStorage
+  persist: localStoragePersist("my-app-audio-settings"), 
   defaultCategoryVolumes: { sfx: 50, music: 50 },
 });
 ```
 
 ### 2. Sound configs
 
-Declare audio assets directly on each sound config. Use `as const satisfies` so `srcKey` variants are typed at compile time.
+Declare audio assets directly on each sound config. 
 
 ```ts
-import type { SoundConfig } from "@webgamedevkit/audio-engine";
+import { defineSoundConfigs } from "@webgamedevkit/audio-engine";
 
-type SoundEvent = "explosion" | "ui_click";
-type AudioCategory = (typeof AUDIO_CATEGORIES)[number];
+type GameEvent = "explosion" | "ui_click";
 
-export const SOUND_CONFIGS = {
+export const SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
   explosion: {
     category: "sfx",
-    volume: 70,
     src: "assets/explosion.wav",
   },
   ui_click: {
     category: "sfx",
-    volume: 50,
     spatial: false,
     src: "assets/click.wav",
   },
-} as const satisfies Record<SoundEvent, SoundConfig<AudioCategory>>;
+});
 ```
 
 ### 3. React hook
@@ -65,12 +69,13 @@ import { useSpatialAudioEngine } from "@webgamedevkit/audio-engine/react";
 const { play, preload, isReady } = useSpatialAudioEngine({
   soundConfigs: SOUND_CONFIGS,
   volumeStore: useAudioStore,
-  onLoadError: (event, url, err) => console.warn(event, url, err),
+  // A common callback for handling errors
+  onLoadError: console.warn,
 });
 
 // Optional: warm caches on a loading screen
 await preload(["explosion"]);
-// or await preload() to preload every configured asset
+// or `await preload()` to preload every configured asset
 
 // Spatial SFX at a world point
 await play("explosion", { worldPosition: { x: 10, y: 0, z: 5 } });
@@ -99,7 +104,7 @@ import { AudioListenerSync } from "@webgamedevkit/audio-engine/r3f";
 For sounds with multiple samples, use `srces` and pass `srcKey` at play time. Omit `srcKey` to pick a random variant.
 
 ```ts
-export const SOUND_CONFIGS = {
+export const SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
   tower_shot: {
     category: "sfx",
     srces: {
@@ -107,7 +112,7 @@ export const SOUND_CONFIGS = {
       laser: "assets/laser.wav",
     },
   },
-} as const satisfies Record<"tower_shot", SoundConfig<AudioCategory>>;
+});
 
 await play("tower_shot", {
   srcKey: "cannon", // typed as "cannon" | "laser"
@@ -132,12 +137,87 @@ const { play } = useSpatialAudioEngine({
 });
 ```
 
+## Custom persistence / save files
+
+Persistence is optional. Omit `persist` for an in-memory store, or supply your own load/save logic.
+
+### Built-in storage wrappers
+
+```ts
+import {
+  createAudioVolumeStore,
+  localStoragePersist,
+  sessionStoragePersist,
+  indexdbPersist,
+} from "@webgamedevkit/audio-engine/stores";
+
+createAudioVolumeStore({
+  categories: AUDIO_CATEGORIES,
+  persist: localStoragePersist("my-app-audio-settings"),
+  // persist: sessionStoragePersist("my-app-audio-settings"),
+  // persist: indexdbPersist("my-app-audio-settings"),
+});
+```
+
+### Custom `{ key, load, save }` (e.g. game save slot)
+
+Your callbacks own where data lives. The store auto-saves on every volume/mute change:
+
+```ts
+import type { VolumePersistedState } from "@webgamedevkit/audio-engine/stores";
+
+type AudioCategory = (typeof AUDIO_CATEGORIES)[number];
+
+let saveData = { audio: null as VolumePersistedState<AudioCategory> | null };
+
+export const useAudioStore = createAudioVolumeStore({
+  categories: AUDIO_CATEGORIES,
+  persist: {
+    key: "game-audio",
+    load: () => saveData.audio,
+    save: (state) => {
+      saveData.audio = state;
+    },
+  },
+});
+
+// On slot load:
+saveData.audio = loadedSave.audio;
+await useAudioStore.persist.rehydrate();
+```
+
+### Manual serialize / hydrate (no auto-save)
+
+When you only want to read/write volumes during explicit save/load:
+
+```ts
+import {
+  createAudioVolumeStore,
+  getVolumePersistedState,
+  hydrateVolumeStore,
+} from "@webgamedevkit/audio-engine/stores";
+
+export const useAudioStore = createAudioVolumeStore({
+  categories: AUDIO_CATEGORIES,
+});
+
+// On save:
+gameSave.audio = getVolumePersistedState(useAudioStore);
+
+// On load:
+hydrateVolumeStore(
+  useAudioStore,
+  gameSave.audio,
+  useAudioStore.categories,
+  useAudioStore.initialCategoryVolumes
+);
+```
+
 ## Package exports
 
 | Import path | Contents |
 |---|---|
-| `@webgamedevkit/audio-engine` | Core engine, types, buffer loader, procedural sounds |
-| `@webgamedevkit/audio-engine/stores` | Zustand volume store factory |
+| `@webgamedevkit/audio-engine` | Core engine, types |
 | `@webgamedevkit/audio-engine/react` | `useSpatialAudioEngine` hook |
 | `@webgamedevkit/audio-engine/r3f` | `AudioListenerSync` component |
 
