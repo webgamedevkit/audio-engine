@@ -88,15 +88,12 @@ export const resolveSoundBuffer = async (
   const url = resolveAssetUrl(config, data);
 
   if (url) {
-    const buffer = await loadAudioBuffer(audioContext, url, url);
-    if (!buffer) {
-      onLoadError?.(
-        event,
-        url,
-        new Error(`Failed to load audio buffer from ${url}`)
-      );
+    try {
+      return await loadAudioBuffer(audioContext, url, url);
+    } catch (error) {
+      onLoadError?.(event, url, error);
+      return null;
     }
-    return buffer;
   }
 
   if (config.srces) {
@@ -140,8 +137,9 @@ export const preloadSoundConfigs = async (
 
   await Promise.all(
     [...urls].map(async (url) => {
-      const buffer = await loadAudioBuffer(audioContext, url, url);
-      if (!buffer) {
+      try {
+        await loadAudioBuffer(audioContext, url, url);
+      } catch (error) {
         const event =
           eventList.find((e) => {
             const config = configs[e];
@@ -149,11 +147,7 @@ export const preloadSoundConfigs = async (
           }) ??
           eventList[0] ??
           "unknown";
-        onLoadError?.(
-          event,
-          url,
-          new Error(`Failed to preload audio buffer from ${url}`)
-        );
+        onLoadError?.(event, url, error);
       }
     })
   );

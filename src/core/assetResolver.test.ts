@@ -32,6 +32,7 @@ const mockBuffer = {
 describe("assetResolver", () => {
   afterEach(() => {
     clearAudioBufferCache();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -115,7 +116,8 @@ describe("assetResolver", () => {
   it("resolveSoundBuffer calls onLoadError when fetch fails", async () => {
     const audioContext = createMockAudioContext();
     const onLoadError = vi.fn();
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network"))));
+    const networkError = new Error("network");
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(networkError)));
 
     const buffer = await resolveSoundBuffer(
       audioContext,
@@ -130,7 +132,7 @@ describe("assetResolver", () => {
     expect(onLoadError).toHaveBeenCalledWith(
       "explosion",
       "/boom.wav",
-      expect.any(Error)
+      networkError
     );
   });
 

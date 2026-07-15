@@ -60,6 +60,7 @@ const createMockAudioContext = () => {
 describe("SpatialAudioEngine internal loading", () => {
   afterEach(() => {
     clearAudioBufferCache();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 

@@ -108,6 +108,10 @@ export const useSpatialAudioEngine = <
   const isActivatedRef = useRef(false);
   const volumeStoreRef = useRef(volumeStore);
   volumeStoreRef.current = volumeStore;
+  const resolveBufferRef = useRef(resolveBuffer);
+  resolveBufferRef.current = resolveBuffer;
+  const onLoadErrorRef = useRef(onLoadError);
+  onLoadErrorRef.current = onLoadError;
 
   useEffect(() => {
     let audioContext: AudioContext;
@@ -124,8 +128,14 @@ export const useSpatialAudioEngine = <
 
     const engine = new SpatialAudioEngine(audioContext, {
       soundConfigs,
-      resolveBuffer,
-      onLoadError,
+      resolveBuffer: resolveBufferRef.current
+        ? (ctx, event, data) =>
+            resolveBufferRef.current!(ctx, event, data)
+        : undefined,
+      onLoadError: onLoadErrorRef.current
+        ? (event, url, error) =>
+            onLoadErrorRef.current!(event, url, error)
+        : undefined,
       getVolumeState: () =>
         toVolumeState(volumeStoreRef.current.getState()),
     });
@@ -175,7 +185,7 @@ export const useSpatialAudioEngine = <
         audioContext.close().catch(console.error);
       }
     };
-  }, [soundConfigs, resolveBuffer, volumeStore, onLoadError]);
+  }, [soundConfigs, volumeStore]);
 
   const play = useCallback(
     async <E extends keyof TConfigs & string>(

@@ -17,6 +17,7 @@ const createMockAudioContext = () =>
 describe("loadAudioBuffer", () => {
   afterEach(() => {
     clearAudioBufferCache();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -48,5 +49,28 @@ describe("loadAudioBuffer", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(first).toBe(second);
+  });
+
+  it("does not cache buffers from loads cleared while in flight", async () => {
+    const audioContext = createMockAudioContext();
+    let fetchCount = 0;
+    const url = "/assets/clear-race.wav";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        fetchCount += 1;
+        if (fetchCount === 1) {
+          clearAudioBufferCache();
+        }
+        return {
+          arrayBuffer: async () => new ArrayBuffer(8),
+        };
+      })
+    );
+
+    await loadAudioBuffer(audioContext, url);
+    await loadAudioBuffer(audioContext, url);
+
+    expect(fetchCount).toBe(2);
   });
 });
