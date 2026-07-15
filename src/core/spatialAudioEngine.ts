@@ -1,9 +1,11 @@
 import type {
+  PlayPayloadForEvent,
   SoundConfig,
   SpatialAudioEngineOptions,
   VolumeState,
   WorldPosition,
 } from "../types";
+import { preloadSoundConfigs, resolveSoundBuffer } from "./assetResolver";
 import { getCategoryVolume, MAX_VOLUME, toVolumeState } from "./volume";
 
 /** Default half-range for randomized playback rate when config omits `pitchSpread`. */
@@ -73,22 +75,27 @@ type PlayingSound<TCategory extends string> = {
  * resolver, then call {@link play}. Activate via {@link setActivated} after a user gesture
  * when the context starts suspended.
  *
- * @typeParam TEvent - String-union (or string) sound / event identifiers.
+ * @typeParam TConfigs - Map of event id → {@link SoundConfig}.
  * @typeParam TCategory - Consumer-defined volume category string union.
  */
 export class SpatialAudioEngine<
-  TEvent extends string,
+  TConfigs extends Record<string, SoundConfig<TCategory>>,
   TCategory extends string = string,
 > {
   /** Shared Web Audio context used for all nodes owned by this engine. */
   private readonly audioContext: AudioContext;
   /** Event id → playback configuration. */
-  private readonly soundConfigs: Record<TEvent, SoundConfig<TCategory>>;
-  /** Async buffer factory for each play request. */
+  private readonly soundConfigs: TConfigs;
+  /** Optional async buffer override for procedural / custom sounds. */
   private readonly resolveBuffer: SpatialAudioEngineOptions<
-    TEvent,
+    TConfigs,
     TCategory
   >["resolveBuffer"];
+  /** Optional callback when file-backed buffer loading fails. */
+  private readonly onLoadError: SpatialAudioEngineOptions<
+    TConfigs,
+    TCategory
+  >["onLoadError"];
   /** Latest volume snapshot provider (may be replaced via {@link updateVolumeState}). */
   private getVolumeState: () => VolumeState<TCategory>;
   /** Active one-shots / loops keyed by internal sound id. */
@@ -106,11 +113,12 @@ export class SpatialAudioEngine<
    */
   constructor(
     audioContext: AudioContext,
-    options: SpatialAudioEngineOptions<TEvent, TCategory>
+    options: SpatialAudioEngineOptions<TConfigs, TCategory>
   ) {
     this.audioContext = audioContext;
     this.soundConfigs = options.soundConfigs;
     this.resolveBuffer = options.resolveBuffer;
+    this.onLoadError = options.onLoadError;
     this.getVolumeState = options.getVolumeState;
   }
 
@@ -139,15 +147,46 @@ export class SpatialAudioEngine<
   };
 
   /**
+   * Preloads file-backed buffers for the given events.
+   * Omit `events` to preload every key in `soundConfigs`.
+   *
+   * @param events - Config keys to preload; defaults to all keys in `soundConfigs`.
+   */
+  preload = async (
+    events?: readonly (keyof TConfigs & string)[]
+  ): Promise<void> => {
+    if (this.disposed) {
+      return;
+    }
+
+    await preloadSoundConfigs(
+      this.audioContext,
+      this.soundConfigs,
+      events,
+      this.onLoadError
+        ? (event, url, error) =>
+            this.onLoadError?.(
+              event as keyof TConfigs & string,
+              url,
+              error
+            )
+        : undefined
+    );
+  };
+
+  /**
    * Resolves a buffer for `event` and starts playback (spatial when possible).
    *
    * Spatial path requires `config.spatial !== false` and a `worldPosition` on `data`.
    * Otherwise the sound plays non-spatially (with a console warning if spatial was expected).
    *
    * @param event - Configured sound / event id.
-   * @param data - Optional payload for the buffer resolver and world-position extraction.
+   * @param data - Optional payload for buffer resolution and world-position extraction.
    */
-  play = async (event: TEvent, data?: unknown): Promise<void> => {
+  play = async <E extends keyof TConfigs & string>(
+    event: E,
+    data?: PlayPayloadForEvent<TConfigs, E>
+  ): Promise<void> => {
     if (this.disposed || !this.activated) {
       return;
     }
@@ -164,7 +203,17 @@ export class SpatialAudioEngine<
 
     let buffer: AudioBuffer | null;
     try {
-      buffer = await this.resolveBuffer(this.audioContext, event, data);
+      buffer = await resolveSoundBuffer(
+        this.audioContext,
+        event,
+        config,
+        this.resolveBuffer,
+        this.onLoadError
+          ? (evt, url, error) =>
+              this.onLoadError?.(evt as keyof TConfigs & string, url, error)
+          : undefined,
+        data
+      );
     } catch (error) {
       console.error(`Failed to create sound buffer for ${event}:`, error);
       return;

@@ -1,5 +1,7 @@
 export type {
   ListenerOrientation,
+  PlayPayloadForConfig,
+  PlayPayloadForEvent,
   SoundConfig,
   SpatialAudioEngineOptions,
   VolumeState,
