@@ -1,6 +1,7 @@
 import type { SoundConfigMap, SoundConfigShape } from "./types";
 
-const eventsUnion = <TEvents extends string>(): TEvents | undefined => undefined;
+const eventsUnion = <TEvents extends string>(): TEvents | undefined =>
+  undefined;
 
 /**
  * Declares a typed map of event id → sound config.
@@ -25,13 +26,16 @@ const eventsUnion = <TEvents extends string>(): TEvents | undefined => undefined
  * ```
  */
 export function defineSoundConfigs<
-  const TCategories extends readonly string[],
-  const TConfigs extends Record<string, SoundConfigShape<TCategories[number]>>,
-  TEvents extends string = keyof TConfigs & string,
+  const TEvents extends string = string,
+  const TCategories extends readonly string[] = readonly string[],
+  TConfigs extends Record<
+    TEvents,
+    SoundConfigShape<TCategories[number]>
+  > = Record<TEvents, SoundConfigShape<TCategories[number]>>
 >(
   _categories: TCategories,
   configs: TConfigs & SoundConfigMap<TCategories, TEvents>,
-  _events: ReturnType<typeof eventsUnion<TEvents>> = eventsUnion<TEvents>(),
+  _events: ReturnType<typeof eventsUnion<TEvents>> = eventsUnion<TEvents>()
 ): TConfigs {
   return configs;
 }
