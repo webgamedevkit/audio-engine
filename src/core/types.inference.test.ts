@@ -1,17 +1,23 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import type { PlayPayloadForEvent, SoundConfig } from "../types";
+import { defineSoundConfigs, forEvents } from "../defineSoundConfigs";
+import type { PlayPayloadForEvent } from "../types";
 
-type AudioCategory = "sfx";
+const AUDIO_CATEGORIES = ["sfx"] as const;
+type TestEvents = "explosion" | "tower_shot" | "ui_click";
 
-const soundConfigs = {
-  explosion: { category: "sfx", src: "/boom.wav" },
-  tower_shot: {
-    category: "sfx",
-    srces: { cannon: "/c.wav", laser: "/l.wav" },
+const soundConfigs = defineSoundConfigs(
+  AUDIO_CATEGORIES,
+  {
+    explosion: { category: "sfx", src: "/boom.wav" },
+    tower_shot: {
+      category: "sfx",
+      srces: { cannon: "/c.wav", laser: "/l.wav" },
+    },
+    ui_click: { category: "sfx", spatial: false },
   },
-  ui_click: { category: "sfx", spatial: false },
-} as const satisfies Record<string, SoundConfig<AudioCategory>>;
+  forEvents<TestEvents>(),
+);
 
 type TestConfigs = typeof soundConfigs;
 

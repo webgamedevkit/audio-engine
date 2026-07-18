@@ -1,6 +1,6 @@
 {
   "name": "@webgamedevkit/audio-engine",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed Web Audio spatial engine for games and 3D apps with optional React and R3F helpers",
   "type": "module",
   "files": [

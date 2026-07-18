@@ -5,7 +5,7 @@ import { SpatialAudioEngine } from "../core/spatialAudioEngine";
 import { toVolumeState } from "../core/volume";
 import type {
   PlayPayloadForEvent,
-  SoundConfig,
+  SoundConfigShape,
   SpatialAudioEngineOptions,
   VolumeStoreApi,
 } from "../types";
@@ -14,13 +14,16 @@ import type {
  * Options for {@link useSpatialAudioEngine}.
  */
 type UseSpatialAudioEngineOptions<
-  TConfigs extends Record<string, SoundConfig<TCategory>>,
-  TCategory extends string = string,
+  TConfigs extends Record<string, SoundConfigShape<TCategory>>,
+  TCategory extends string = string
 > = {
   /** Map of event id → {@link SoundConfig} passed to the engine. */
   soundConfigs: TConfigs;
   /** Optional buffer override for events without `src` / `srces`. */
-  resolveBuffer?: SpatialAudioEngineOptions<TConfigs, TCategory>["resolveBuffer"];
+  resolveBuffer?: SpatialAudioEngineOptions<
+    TConfigs,
+    TCategory
+  >["resolveBuffer"];
   /**
    * Volume store API (`getState` + `subscribe`).
    * Used internally for play-time gain and live updates on currently playing sounds.
@@ -36,7 +39,7 @@ type UseSpatialAudioEngineOptions<
  * @typeParam TConfigs - Map of event id → {@link SoundConfig}.
  */
 type UseSpatialAudioEngineResult<
-  TConfigs extends Record<string, SoundConfig>,
+  TConfigs extends Record<string, SoundConfigShape>
 > = {
   /**
    * Plays a configured event through the live engine (no-op before activation / after unmount).
@@ -92,8 +95,8 @@ const createBrowserAudioContext = (): AudioContext => {
  * @returns Stable `play` / `preload` callbacks and readiness flag.
  */
 export const useSpatialAudioEngine = <
-  const TConfigs extends Record<string, SoundConfig<TCategory>>,
-  TCategory extends string = string,
+  const TConfigs extends Record<string, SoundConfigShape<TCategory>>,
+  TCategory extends string = string
 >({
   soundConfigs,
   resolveBuffer,
@@ -103,7 +106,9 @@ export const useSpatialAudioEngine = <
   TConfigs,
   TCategory
 >): UseSpatialAudioEngineResult<TConfigs> => {
-  const engineRef = useRef<SpatialAudioEngine<TConfigs, TCategory> | null>(null);
+  const engineRef = useRef<SpatialAudioEngine<TConfigs, TCategory> | null>(
+    null
+  );
   const audioContextRef = useRef<AudioContext | null>(null);
   const isActivatedRef = useRef(false);
   const volumeStoreRef = useRef(volumeStore);
@@ -129,15 +134,12 @@ export const useSpatialAudioEngine = <
     const engine = new SpatialAudioEngine(audioContext, {
       soundConfigs,
       resolveBuffer: resolveBufferRef.current
-        ? (ctx, event, data) =>
-            resolveBufferRef.current!(ctx, event, data)
+        ? (ctx, event, data) => resolveBufferRef.current!(ctx, event, data)
         : undefined,
       onLoadError: onLoadErrorRef.current
-        ? (event, url, error) =>
-            onLoadErrorRef.current!(event, url, error)
+        ? (event, url, error) => onLoadErrorRef.current!(event, url, error)
         : undefined,
-      getVolumeState: () =>
-        toVolumeState(volumeStoreRef.current.getState()),
+      getVolumeState: () => toVolumeState(volumeStoreRef.current.getState()),
     });
     engineRef.current = engine;
 

@@ -1,8 +1,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { StoreApi, UseBoundStore } from "zustand";
 
 import { MAX_VOLUME, MIN_VOLUME } from "../core/volume";
 import type { VolumeState } from "../types";
+import {
+  toPersistStorage,
+  validateVolumePersistedState,
+} from "./volumePersistence";
+import type { VolumePersistence, VolumePersistedState } from "./volumePersistence.types";
 
 /** Default volume when a category or master has no override. */
 const DEFAULT_VOLUME = 50;
@@ -41,15 +47,15 @@ type AudioVolumeStore<TCategory extends string> = VolumeState<TCategory> & {
  */
 type CreateAudioVolumeStoreOptions<TCategories extends readonly string[]> = {
   /**
-   * `localStorage` key used by Zustand `persist`
-   * (should be unique per app / game build).
-   */
-  persistKey: string;
-  /**
    * Readonly category list (`as const`). Types for volumes and setters
    * are inferred from this tuple.
    */
   categories: TCategories;
+  /**
+   * Optional persistence config. Omit for an in-memory-only store.
+   * Use {@link localStoragePersist} or a custom `{ key, load, save }` object.
+   */
+  persist?: VolumePersistence<TCategories[number]>;
   /**
    * Optional per-category default volumes.
    * Unspecified categories fall back to {@link DEFAULT_VOLUME}.
@@ -87,42 +93,88 @@ const buildCategoryVolumes = <TCategories extends readonly string[]>(
   return volumes;
 };
 
-/**
- * True when persisted category keys match the configured category list
- * (same set of names, ignoring order).
- */
-const categoriesMatch = (
-  persisted: Record<string, number> | undefined,
-  categories: readonly string[]
-): boolean => {
-  if (!persisted || typeof persisted !== "object") {
-    return false;
+const partializeVolumeState = <TCategory extends string>(
+  state: AudioVolumeStore<TCategory>
+): VolumePersistedState<TCategory> => ({
+  masterVolume: state.masterVolume,
+  categoryVolumes: state.categoryVolumes,
+  muted: state.muted,
+});
+
+const mergePersistedVolumeState = <TCategory extends string>(
+  persistedState: unknown,
+  currentState: AudioVolumeStore<TCategory>,
+  categories: readonly string[],
+  initialCategoryVolumes: Record<TCategory, number>
+): AudioVolumeStore<TCategory> => {
+  const persisted = validateVolumePersistedState<TCategory>(
+    persistedState,
+    categories
+  );
+
+  if (!persisted?.categoryVolumes) {
+    return currentState;
   }
 
-  const persistedKeys = Object.keys(persisted).sort();
-  const configuredKeys = [...categories].sort();
-
-  if (persistedKeys.length !== configuredKeys.length) {
-    return false;
-  }
-
-  return persistedKeys.every((key, index) => key === configuredKeys[index]);
+  return {
+    ...currentState,
+    ...persisted,
+    categoryVolumes: {
+      ...initialCategoryVolumes,
+      ...persisted.categoryVolumes,
+    },
+  };
 };
 
+type AudioVolumeStoreHook<TCategory extends string> = UseBoundStore<
+  StoreApi<AudioVolumeStore<TCategory>>
+>;
+
+type CreatedAudioVolumeStore<
+  TCategory extends string,
+  TCategories extends readonly string[]
+> = AudioVolumeStoreHook<TCategory> & {
+  categories: TCategories;
+  initialCategoryVolumes: Record<TCategory, number>;
+};
+
+type PersistedAudioVolumeStore<
+  TCategory extends string,
+  TCategories extends readonly string[]
+> = CreatedAudioVolumeStore<TCategory, TCategories> & {
+  persist: {
+    clearStorage: () => void;
+    rehydrate: () => Promise<void> | void;
+    hasHydrated: () => boolean;
+  };
+};
+
+type CreateAudioVolumeStoreResult<
+  TCategories extends readonly string[],
+  TPersist extends VolumePersistence<TCategories[number]> | undefined
+> = TPersist extends VolumePersistence<TCategories[number]>
+  ? PersistedAudioVolumeStore<TCategories[number], TCategories>
+  : CreatedAudioVolumeStore<TCategories[number], TCategories>;
+
 /**
- * Creates a persisted Zustand store for master / category volumes and mute.
+ * Creates a Zustand store for master / category volumes and mute.
+ * Optionally persists via {@link VolumePersistence}.
  *
- * @param options - Persistence key, category tuple, and optional default volumes.
+ * @param options - Category tuple, optional persistence, and default volumes.
  * @returns A Zustand hook store typed to the category tuple, with `.categories` attached.
  */
-export const createAudioVolumeStore = <
+export function createAudioVolumeStore<
   TCategories extends readonly string[],
->({
-  persistKey,
-  categories,
-  defaultCategoryVolumes,
-  defaultMasterVolume = DEFAULT_VOLUME,
-}: CreateAudioVolumeStoreOptions<TCategories>) => {
+  TOptions extends CreateAudioVolumeStoreOptions<TCategories>
+>(
+  options: TOptions
+): CreateAudioVolumeStoreResult<TCategories, TOptions["persist"]> {
+  const {
+    categories,
+    persist: persistConfig,
+    defaultCategoryVolumes,
+    defaultMasterVolume = DEFAULT_VOLUME,
+  } = options;
   type TCategory = TCategories[number];
 
   const initialCategoryVolumes = buildCategoryVolumes(
@@ -130,67 +182,74 @@ export const createAudioVolumeStore = <
     defaultCategoryVolumes
   );
 
-  const store = create<AudioVolumeStore<TCategory>>()(
-    persist(
-      (set) => ({
-        masterVolume: defaultMasterVolume,
-        categoryVolumes: initialCategoryVolumes,
-        muted: false,
+  const storeExtras = {
+    categories,
+    initialCategoryVolumes,
+  };
 
-        setMasterVolume: (volume: number) => {
-          set({ masterVolume: clampVolume(volume) });
+  const createState = (
+    set: (
+      partial:
+        | Partial<AudioVolumeStore<TCategory>>
+        | ((
+            state: AudioVolumeStore<TCategory>
+          ) => Partial<AudioVolumeStore<TCategory>>)
+    ) => void
+  ): AudioVolumeStore<TCategory> => ({
+    masterVolume: defaultMasterVolume,
+    categoryVolumes: initialCategoryVolumes,
+    muted: false,
+
+    setMasterVolume: (volume: number) => {
+      set({ masterVolume: clampVolume(volume) });
+    },
+
+    setCategoryVolume: (category: TCategory, volume: number) => {
+      set((state) => ({
+        categoryVolumes: {
+          ...state.categoryVolumes,
+          [category]: clampVolume(volume),
         },
+      }));
+    },
 
-        setCategoryVolume: (category: TCategory, volume: number) => {
-          set((state) => ({
-            categoryVolumes: {
-              ...state.categoryVolumes,
-              [category]: clampVolume(volume),
-            },
-          }));
-        },
+    setMuted: (muted: boolean) => {
+      set({ muted });
+    },
 
-        setMuted: (muted: boolean) => {
-          set({ muted });
-        },
+    toggleMute: () => {
+      set((state) => ({ muted: !state.muted }));
+    },
+  });
 
-        toggleMute: () => {
-          set((state) => ({ muted: !state.muted }));
-        },
-      }),
-      {
-        name: persistKey,
-        partialize: (state) => ({
-          masterVolume: state.masterVolume,
-          categoryVolumes: state.categoryVolumes,
-          muted: state.muted,
-        }),
-        merge: (persistedState, currentState) => {
-          const persisted = persistedState as
-            | Partial<AudioVolumeStore<TCategory>>
-            | undefined;
+  if (persistConfig) {
+    const store = create<AudioVolumeStore<TCategory>>()(
+      persist((set) => createState(set), {
+        name: persistConfig.key,
+        storage: toPersistStorage(persistConfig, categories),
+        partialize: partializeVolumeState,
+        merge: (persistedState, currentState) =>
+          mergePersistedVolumeState(
+            persistedState,
+            currentState,
+            categories,
+            initialCategoryVolumes
+          ),
+      })
+    );
 
-          if (
-            !persisted ||
-            !categoriesMatch(persisted.categoryVolumes, categories)
-          ) {
-            return currentState;
-          }
+    return Object.assign(store, storeExtras) as CreateAudioVolumeStoreResult<
+      TCategories,
+      TOptions["persist"]
+    >;
+  }
 
-          return {
-            ...currentState,
-            ...persisted,
-            categoryVolumes: {
-              ...initialCategoryVolumes,
-              ...persisted.categoryVolumes,
-            },
-          };
-        },
-      }
-    )
-  );
+  const store = create<AudioVolumeStore<TCategory>>()(createState);
 
-  return Object.assign(store, { categories });
-};
+  return Object.assign(store, storeExtras) as CreateAudioVolumeStoreResult<
+    TCategories,
+    TOptions["persist"]
+  >;
+}
 
 export type { AudioVolumeStore };
