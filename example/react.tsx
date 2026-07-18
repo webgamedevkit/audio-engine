@@ -2,14 +2,14 @@ import { defineSoundConfigs } from "../src/defineSoundConfigs";
 import { useSpatialAudioEngine } from "../src/react";
 import { createAudioVolumeStore } from "../src/stores";
 
-const AUDIO_CATEGORIES = ["sfx", "music"];
+const AUDIO_CATEGORIES = ["sfx", "music"] as const;
 const volumeStore = createAudioVolumeStore({
   categories: AUDIO_CATEGORIES,
 });
 
-type GameEvent = 'explosion' | 'ui_click';
+type GameEvent = "explosion" | "ui_click";
 
-export const SOUND_CONFIGS = defineSoundConfigs<GameEvent>(AUDIO_CATEGORIES,{
+export const SOUND_CONFIGS = defineSoundConfigs<GameEvent>(AUDIO_CATEGORIES, {
   explosion: {
     category: "sfx",
     src: "assets/explosion.wav",
@@ -27,13 +27,16 @@ export const React = () => {
     volumeStore,
   });
 
-  play("explosion")
-  play("ui_click")
-
   return (
     <div>
       <h1>React</h1>
       <p>This is a React component</p>
+      <button type="button" onClick={() => void play("explosion")}>
+        Play explosion
+      </button>
+      <button type="button" onClick={() => void play("ui_click")}>
+        Play click
+      </button>
     </div>
   );
 };

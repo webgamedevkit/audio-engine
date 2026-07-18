@@ -44,21 +44,25 @@ export const useAudioStore = createAudioVolumeStore({
 Declare audio assets directly on each sound config. 
 
 ```ts
-import { defineSoundConfigs } from "@webgamedevkit/audio-engine";
+import { defineSoundConfigs, forEvents } from "@webgamedevkit/audio-engine";
 
 type GameEvent = "explosion" | "ui_click";
 
-export const SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
-  explosion: {
-    category: "sfx",
-    src: "assets/explosion.wav",
+export const SOUND_CONFIGS = defineSoundConfigs(
+  AUDIO_CATEGORIES,
+  {
+    explosion: {
+      category: "sfx",
+      src: "assets/explosion.wav",
+    },
+    ui_click: {
+      category: "sfx",
+      spatial: false,
+      src: "assets/click.wav",
+    },
   },
-  ui_click: {
-    category: "sfx",
-    spatial: false,
-    src: "assets/click.wav",
-  },
-});
+  forEvents<GameEvent>()
+);
 ```
 
 ### 3. React hook
@@ -125,17 +129,23 @@ await play("tower_shot", {
 For synthetic or runtime-generated buffers, provide an optional `resolveBuffer` override. The engine uses it only for events without `src` / `srces`.
 
 ```ts
+const PROCEDURAL_SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
+  explosion: { category: "sfx", src: "assets/explosion.wav" },
+  ui_click: { category: "sfx", spatial: false, src: "assets/click.wav" },
+  synth_click: { category: "sfx", spatial: false },
+});
+
 const { play } = useSpatialAudioEngine({
-  soundConfigs: SOUND_CONFIGS,
+  soundConfigs: PROCEDURAL_SOUND_CONFIGS,
   volumeStore: useAudioStore,
   resolveBuffer: async (ctx, event) => {
-    if (event !== "ui_click") return null;
+    if (event !== "synth_click") return null;
 
     const duration = 0.05;
     const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) {
-      const t = i / data.length;
+      const t = i / ctx.sampleRate;
       data[i] = Math.sin(2 * Math.PI * 800 * t) * Math.exp(-t * 20) * 0.1;
     }
     return buffer;
@@ -224,6 +234,7 @@ hydrateVolumeStore(
 | Import path | Contents |
 |---|---|
 | `@webgamedevkit/audio-engine` | Core engine, types |
+| `@webgamedevkit/audio-engine/stores` | Volume store, persistence helpers |
 | `@webgamedevkit/audio-engine/react` | `useSpatialAudioEngine` hook |
 | `@webgamedevkit/audio-engine/r3f` | `AudioListenerSync` component |
 

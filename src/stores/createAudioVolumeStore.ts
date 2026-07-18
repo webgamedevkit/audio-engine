@@ -5,8 +5,8 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { MAX_VOLUME, MIN_VOLUME } from "../core/volume";
 import type { VolumeState } from "../types";
 import {
-  categoriesMatch,
   toPersistStorage,
+  validateVolumePersistedState,
 } from "./volumePersistence";
 import type { VolumePersistence, VolumePersistedState } from "./volumePersistence.types";
 
@@ -107,11 +107,12 @@ const mergePersistedVolumeState = <TCategory extends string>(
   categories: readonly string[],
   initialCategoryVolumes: Record<TCategory, number>
 ): AudioVolumeStore<TCategory> => {
-  const persisted = persistedState as
-    | Partial<VolumePersistedState<TCategory>>
-    | undefined;
+  const persisted = validateVolumePersistedState<TCategory>(
+    persistedState,
+    categories
+  );
 
-  if (!persisted || !categoriesMatch(persisted.categoryVolumes, categories)) {
+  if (!persisted?.categoryVolumes) {
     return currentState;
   }
 

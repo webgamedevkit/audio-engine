@@ -30,27 +30,36 @@ export const indexdbPersist = <TCategory extends string = string>(
   key,
   load: async () => {
     const db = await openIndexedDb(dbName);
-    const raw = await idbRequest(
-      db.transaction("volume").objectStore("volume").get(key)
-    );
-    db.close();
-    return parsePersistedState<TCategory>(typeof raw === "string" ? raw : null);
+    try {
+      const raw = await idbRequest(
+        db.transaction("volume").objectStore("volume").get(key)
+      );
+      return parsePersistedState<TCategory>(typeof raw === "string" ? raw : null);
+    } finally {
+      db.close();
+    }
   },
   save: async (state) => {
     const db = await openIndexedDb(dbName);
-    await idbRequest(
-      db
-        .transaction("volume", "readwrite")
-        .objectStore("volume")
-        .put(JSON.stringify(state), key)
-    );
-    db.close();
+    try {
+      await idbRequest(
+        db
+          .transaction("volume", "readwrite")
+          .objectStore("volume")
+          .put(JSON.stringify(state), key)
+      );
+    } finally {
+      db.close();
+    }
   },
   remove: async () => {
     const db = await openIndexedDb(dbName);
-    await idbRequest(
-      db.transaction("volume", "readwrite").objectStore("volume").delete(key)
-    );
-    db.close();
+    try {
+      await idbRequest(
+        db.transaction("volume", "readwrite").objectStore("volume").delete(key)
+      );
+    } finally {
+      db.close();
+    }
   },
 });
