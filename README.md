@@ -23,7 +23,8 @@ npm install react @react-three/fiber three
 It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle
 
 ```ts
-// stores/audioStore.ts
+// .../stores/audioStore.ts
+
 import {
   createAudioVolumeStore,
   localStoragePersist,
@@ -45,49 +46,63 @@ export const useAudioStore = createAudioVolumeStore({
 Declare audio assets directly on each sound config. 
 
 ```ts
+// .../constants/audio.ts
+
 import { defineSoundConfigs } from "@webgamedevkit/audio-engine";
 import { AUDIO_CATEGORIES } from "../stores/audioStore"
 
 // Provide your in-game events
-type GameEvent = "explosion" | "ui_click";
+type GameEvent = "explosion" | "ui_click" | "game_start";
 
 export const SOUND_CONFIGS = defineSoundConfigs<GameEvent>(
   AUDIO_CATEGORIES,
   {
     explosion: {
+      // Fully typed categories --> "sfx" | "music"
       category: "sfx",
       src: "assets/explosion.wav",
     },
     ui_click: {
       category: "sfx",
+      // Configure if this sound should be spatial
       spatial: false,
       src: "assets/click.wav",
     },
+    game_start: {
+      category: "music",
+      spatial: false,
+      // You can specify multiple sources
+      srces: {
+        episode_1: "assets/main_theme.wav",
+        episode_2: "assets/main_theme_alt.wav",
+      },
+    }
   },
 );
 ```
 
-### 3. React hook
+### 3. Usage in React
 
 ```tsx
 import { useSpatialAudioEngine } from "@webgamedevkit/audio-engine/react";
+import { useAudioStore } from "../stores/audioStore"
+import { SOUND_CONFIGS } from "../constants/audio";
 
 const { play, preload, isReady } = useSpatialAudioEngine({
+  audioStore: useAudioStore,
   soundConfigs: SOUND_CONFIGS,
-  volumeStore: useAudioStore,
   // A common callback for handling errors
   onLoadError: console.warn,
 });
 
-// Optional: warm caches on a loading screen
-await preload(["explosion"]);
-// or `await preload()` to preload every configured asset
-
-// Spatial SFX at a world point
-await play("explosion", { worldPosition: { x: 10, y: 0, z: 5 } });
-
-// Non-spatial UI sound
+// ... Somewhere later ...
 await play("ui_click");
+
+await play(
+  "explosion", 
+  // Provide position for spatial sound
+  { worldPosition: { x: 10, y: 0, z: 5 } } 
+);
 ```
 
 The hook creates an `AudioContext`, resumes it on the first user click / keydown / touch, and reapplies volumes whenever the store changes. `isReady` is `true` once the context is activated.
@@ -154,11 +169,11 @@ On first use, the engine scans the decoded `AudioBuffer` for the absolute peak a
 
 Effective gain at play time: `(master / 100) × (category / 100) × normalizationGain`. `preload()` warms the peak cache when any config for that URL opts in, so the first gameplay `play` does not hitch.
 
-| Config A | Config B | Fetch | Peak scan | Playback gain |
-|----------|----------|-------|-----------|---------------|
-| `normalize: true` | omitted | 1× | 1× (if A preloads/plays) | A scaled, B unity |
-| `normalize: true` | `{ targetPeak: 0.5 }` | 1× | 1× | different gains, same peak |
-| both omitted | — | 1× | 0× | both unity |
+| Config A | Config B | Peak scan | Playback gain |
+|----------|----------|-----------|---------------|
+| `normalize: true` | omitted | 1× (if A preloads/plays) | A scaled, B unity |
+| `normalize: true` | `{ targetPeak: 0.5 }` | 1× | different gains, same peak |
+| both omitted | — | 0× | both unity |
 
 **Limitations:**
 
@@ -181,7 +196,7 @@ const PROCEDURAL_SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
 
 const { play } = useSpatialAudioEngine({
   soundConfigs: PROCEDURAL_SOUND_CONFIGS,
-  volumeStore: useAudioStore,
+  audioStore: useAudioStore,
   resolveBuffer: async (ctx, event) => {
     if (event !== "synth_click") return null;
 
