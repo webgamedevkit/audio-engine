@@ -213,6 +213,16 @@ export const parsePersistedState = <TCategory extends string>(
     if (!hasValidSnapshotValues(parsed)) {
       return null;
     }
+
+    const record = parsed as Record<string, unknown>;
+    if (
+      record.categoryVolumes === undefined ||
+      record.masterVolume === undefined ||
+      record.muted === undefined
+    ) {
+      return null;
+    }
+
     return parsed as VolumePersistedState<TCategory>;
   } catch {
     return null;
