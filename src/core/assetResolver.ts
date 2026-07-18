@@ -1,4 +1,8 @@
 import { loadAudioBuffer } from "./bufferLoader";
+import {
+  configRequestsNormalization,
+  warmBufferPeak,
+} from "./peakNormalization";
 import type { SoundConfig } from "../types";
 
 type ResolveBufferFn = (
@@ -123,22 +127,26 @@ export const preloadSoundConfigs = async (
   onLoadError: OnLoadErrorFn | undefined
 ): Promise<void> => {
   const eventList = events ?? Object.keys(configs);
-  const urls = new Set<string>();
+  const urlEntries = new Map<string, boolean>();
 
   for (const event of eventList) {
     const config = configs[event];
     if (!config) {
       continue;
     }
+    const wantsPeakWarm = configRequestsNormalization(config);
     for (const url of collectUrlsFromConfig(config)) {
-      urls.add(url);
+      urlEntries.set(url, urlEntries.get(url) || wantsPeakWarm);
     }
   }
 
   await Promise.all(
-    [...urls].map(async (url) => {
+    [...urlEntries.entries()].map(async ([url, warmPeak]) => {
       try {
-        await loadAudioBuffer(audioContext, url, url);
+        const buffer = await loadAudioBuffer(audioContext, url, url);
+        if (warmPeak) {
+          warmBufferPeak(buffer);
+        }
       } catch (error) {
         const event =
           eventList.find((e) => {

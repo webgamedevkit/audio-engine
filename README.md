@@ -23,6 +23,7 @@ npm install react @react-three/fiber three
 It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle
 
 ```ts
+// stores/audioStore.ts
 import {
   createAudioVolumeStore,
   localStoragePersist,
@@ -44,11 +45,13 @@ export const useAudioStore = createAudioVolumeStore({
 Declare audio assets directly on each sound config. 
 
 ```ts
-import { defineSoundConfigs, forEvents } from "@webgamedevkit/audio-engine";
+import { defineSoundConfigs } from "@webgamedevkit/audio-engine";
+import { AUDIO_CATEGORIES } from "../stores/audioStore"
 
+// Provide your in-game events
 type GameEvent = "explosion" | "ui_click";
 
-export const SOUND_CONFIGS = defineSoundConfigs(
+export const SOUND_CONFIGS = defineSoundConfigs<GameEvent>(
   AUDIO_CATEGORIES,
   {
     explosion: {
@@ -61,7 +64,6 @@ export const SOUND_CONFIGS = defineSoundConfigs(
       src: "assets/click.wav",
     },
   },
-  forEvents<GameEvent>()
 );
 ```
 
@@ -124,7 +126,49 @@ await play("tower_shot", {
 });
 ```
 
-## Advanced: procedural sounds
+## Advanced
+
+Optional patterns for less common setups.
+
+### Peak gain normalization
+
+Use `normalize` on file-backed configs to level inconsistent one-shot SFX without re-encoding or duplicating buffers. Skip it for music and long ambience loops — normalize those offline instead.
+
+```ts
+export const SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
+  footstep: {
+    category: "sfx",
+    src: "assets/footstep.wav",
+    normalize: true, // default target: −1 dBFS
+  },
+  ui_tick: {
+    category: "sfx",
+    spatial: false,
+    src: "assets/tick.wav",
+    normalize: { targetPeak: 0.5 }, // custom linear peak in (0, 1]
+  },
+});
+```
+
+On first use, the engine scans the decoded `AudioBuffer` for the absolute peak across all channels and caches it. Playback gain is multiplied by `targetPeak / measuredPeak` (quiet clips boosted, hot clips attenuated). The decoded buffer is shared; only the gain differs per config/play.
+
+Effective gain at play time: `(master / 100) × (category / 100) × normalizationGain`. `preload()` warms the peak cache when any config for that URL opts in, so the first gameplay `play` does not hitch.
+
+| Config A | Config B | Fetch | Peak scan | Playback gain |
+|----------|----------|-------|-----------|---------------|
+| `normalize: true` | omitted | 1× | 1× (if A preloads/plays) | A scaled, B unity |
+| `normalize: true` | `{ targetPeak: 0.5 }` | 1× | 1× | different gains, same peak |
+| both omitted | — | 1× | 0× | both unity |
+
+**Limitations:**
+
+- **Peak ≠ loudness** — two sounds at the same peak can still feel very different; prefer offline LUFS for authored packs.
+- **Boost side effects** — quiet assets get amplified (noise floor, hiss); overlapping boosted one-shots can clip; this is not a master limiter.
+- **Main-thread cost** — peak scan is O(samples × channels) and synchronous; fine for short SFX, avoid on long loops.
+- **Scope** — file-backed `src` / `srces` only; ignored for `resolveBuffer` / procedural sounds.
+- **Not a substitute** for per-sound mix gain or bus compression/limiting.
+
+### Procedural sounds
 
 For synthetic or runtime-generated buffers, provide an optional `resolveBuffer` override. The engine uses it only for events without `src` / `srces`.
 
@@ -153,11 +197,11 @@ const { play } = useSpatialAudioEngine({
 });
 ```
 
-## Custom persistence / save files
+### Custom persistence / save files
 
 Persistence is optional. Omit `persist` for an in-memory store, or supply your own load/save logic.
 
-### Built-in storage wrappers
+#### Built-in storage wrappers
 
 ```ts
 import {
@@ -175,7 +219,7 @@ createAudioVolumeStore({
 });
 ```
 
-### Custom `{ key, load, save }` (e.g. game save slot)
+#### Custom `{ key, load, save }` (e.g. game save slot)
 
 Your callbacks own where data lives. The store auto-saves on every volume/mute change:
 
@@ -202,7 +246,7 @@ saveData.audio = loadedSave.audio;
 await useAudioStore.persist.rehydrate();
 ```
 
-### Manual serialize / hydrate (no auto-save)
+#### Manual serialize / hydrate (no auto-save)
 
 When you only want to read/write volumes during explicit save/load:
 
@@ -242,8 +286,9 @@ hydrateVolumeStore(
 
 - **Internal loading** — File-backed sounds load from `src` / `srces` on the config. Buffers are cached and deduplicated across concurrent requests.
 - **Spatial vs non-spatial** — A sound is spatial when `config.spatial !== false` and `data.worldPosition` is present. Otherwise it plays flat (a warning is logged if spatial was expected but position is missing).
-- **Live volume** — Changing master, category, or mute in the store updates gain on all currently playing sounds.
+- **Live volume** — Changing master, category, or mute in the store updates gain on all currently playing sounds. Store values use a `0`–`100` scale; effective gain is `(master / 100) × (category / 100)`, so defaults of `50`/`50` produce `0.25` linear gain and `100`/`100` produces unity (`1.0`).
 - **Pitch variation** — One-shots get a random `playbackRate` unless `pitchVariation: false` or `loop: true`.
+- **Peak normalization** — Opt-in `normalize` on file-backed configs scales playback gain from a cached peak scan (default −1 dBFS). This is not loudness matching or a limiter; best for short SFX, not long music loops.
 - **Without React** — Instantiate `SpatialAudioEngine` directly, call `setActivated(true)` after a user gesture, and manage the `AudioContext` yourself.
 
 ## Development
