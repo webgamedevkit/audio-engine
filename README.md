@@ -125,15 +125,21 @@ await play("tower_shot", {
 For synthetic or runtime-generated buffers, provide an optional `resolveBuffer` override. The engine uses it only for events without `src` / `srces`.
 
 ```ts
-import { generatePlaceholderSound } from "@webgamedevkit/audio-engine";
-
 const { play } = useSpatialAudioEngine({
   soundConfigs: SOUND_CONFIGS,
   volumeStore: useAudioStore,
-  resolveBuffer: async (ctx, event) =>
-    event === "ui_click"
-      ? generatePlaceholderSound(ctx, "click", 0.05)
-      : null,
+  resolveBuffer: async (ctx, event) => {
+    if (event !== "ui_click") return null;
+
+    const duration = 0.05;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length;
+      data[i] = Math.sin(2 * Math.PI * 800 * t) * Math.exp(-t * 20) * 0.1;
+    }
+    return buffer;
+  },
 });
 ```
 
