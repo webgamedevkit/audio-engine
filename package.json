@@ -1,6 +1,6 @@
 {
   "name": "@webgamedevkit/audio-engine",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Typed Web Audio spatial engine for games and 3D apps with optional React and R3F helpers",
   "type": "module",
   "files": [
@@ -69,7 +69,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/webgamedevkit/audio-engine.git"
+    "url": "git+https://github.com/webgamedevkit/audio-engine.git"
   },
   "license": "MIT",
   "publishConfig": {
