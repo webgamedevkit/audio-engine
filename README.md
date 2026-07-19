@@ -20,36 +20,36 @@ npm install react @react-three/fiber three
 
 ### 1. Define a volume store
 
-It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle
+It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle:
 
 ```ts
-// .../stores/audioStore.ts
+// .../stores/volumeStore.ts
 
 import {
   createAudioVolumeStore,
   localStoragePersist,
 } from "@webgamedevkit/audio-engine/stores";
 
-// List of categories you want to have a separate volume value
+// List of categories you want to have a separate volume value for
 const AUDIO_CATEGORIES = ["sfx", "music"] as const; 
 
-export const useAudioStore = createAudioVolumeStore({
+export const volumeStore = createAudioVolumeStore({
   categories: AUDIO_CATEGORIES,
   // Saves values to localStorage
-  persist: localStoragePersist("my-app-audio-settings"), 
+  persist: localStoragePersist("my-app-audio-settings"),
   defaultCategoryVolumes: { sfx: 50, music: 50 },
 });
 ```
 
 ### 2. Sound configs
 
-Declare audio assets directly on each sound config. 
+Declare audio assets directly on each sound config. Each sound corresponds to game event you provided so you won't leave any of your events w/o a sound:
 
 ```ts
 // .../constants/audio.ts
 
 import { defineSoundConfigs } from "@webgamedevkit/audio-engine";
-import { AUDIO_CATEGORIES } from "../stores/audioStore"
+import { AUDIO_CATEGORIES } from "../stores/volumeStore"
 
 // Provide your in-game events
 type GameEvent = "explosion" | "ui_click" | "game_start";
@@ -83,13 +83,15 @@ export const SOUND_CONFIGS = defineSoundConfigs<GameEvent>(
 
 ### 3. Usage in React
 
+For React you can use a helper hook called `useSpatialAudioEngine`. It provides a simple type-safe API for you to play sounds:
+
 ```tsx
 import { useSpatialAudioEngine } from "@webgamedevkit/audio-engine/react";
-import { useAudioStore } from "../stores/audioStore"
+import { volumeStore } from "../stores/volumeStore"
 import { SOUND_CONFIGS } from "../constants/audio";
 
-const { play, preload, isReady } = useSpatialAudioEngine({
-  audioStore: useAudioStore,
+const { play, isReady } = useSpatialAudioEngine({
+  volumeStore: volumeStore,
   soundConfigs: SOUND_CONFIGS,
   // A common callback for handling errors
   onLoadError: console.warn,
@@ -107,9 +109,9 @@ await play(
 
 The hook creates an `AudioContext`, resumes it on the first user click / keydown / touch, and reapplies volumes whenever the store changes. `isReady` is `true` once the context is activated.
 
-### 4. R3F listener (for spatial sounds)
+### 4. Syncronization with React Three Fiber
 
-Mount inside your `<Canvas>` so panners hear from the camera's point of view:
+In order for you to play spatial sounds in `react-three-fiber`, you'll have to syncronize it with the engine and the camera you have. Use `<AudioListenerSync>` as convinience component inside your `<Canvas>` so panners hear from the camera's point of view:
 
 ```tsx
 import { AudioListenerSync } from "@webgamedevkit/audio-engine/r3f";
