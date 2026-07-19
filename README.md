@@ -167,7 +167,7 @@ export const SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
 });
 ```
 
-On first use, the engine scans the decoded `AudioBuffer` for the absolute peak across all channels and caches it. Playback gain is multiplied by `targetPeak / measuredPeak` (quiet clips boosted, hot clips attenuated). The decoded buffer is shared; only the gain differs per config/play.
+On first use, the engine scans the decoded `AudioBuffer` for the absolute peak across all channels and caches it. For finite, nonzero peaks, playback gain is multiplied by `targetPeak / measuredPeak` (quiet clips boosted, hot clips attenuated). Silent or invalid decoded buffers, where the measured peak is zero or non-finite, use unity gain instead. The decoded buffer is shared; only the gain differs per config/play.
 
 Effective gain at play time: `(master / 100) × (category / 100) × normalizationGain`. `preload()` warms the peak cache when any config for that URL opts in, so the first gameplay `play` does not hitch.
 
@@ -241,7 +241,10 @@ createAudioVolumeStore({
 Your callbacks own where data lives. The store auto-saves on every volume/mute change:
 
 ```ts
-import type { VolumePersistedState } from "@webgamedevkit/audio-engine/stores";
+import {
+  createAudioVolumeStore,
+  type VolumePersistedState,
+} from "@webgamedevkit/audio-engine/stores";
 
 type AudioCategory = (typeof AUDIO_CATEGORIES)[number];
 
