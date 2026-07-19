@@ -31,7 +31,7 @@ import {
 } from "@webgamedevkit/audio-engine/stores";
 
 // List of categories you want to have a separate volume value for
-const AUDIO_CATEGORIES = ["sfx", "music"] as const; 
+export const AUDIO_CATEGORIES = ["sfx", "music"] as const; 
 
 export const volumeStore = createAudioVolumeStore({
   categories: AUDIO_CATEGORIES,
@@ -109,9 +109,9 @@ await play(
 
 The hook creates an `AudioContext`, resumes it on the first user click / keydown / touch, and reapplies volumes whenever the store changes. `isReady` is `true` once the context is activated.
 
-### 4. Syncronization with React Three Fiber
+### 4. Synchronization with React Three Fiber
 
-In order for you to play spatial sounds in `react-three-fiber`, you'll have to syncronize it with the engine and the camera you have. Use `<AudioListenerSync>` as convinience component inside your `<Canvas>` so panners hear from the camera's point of view:
+In order for you to play spatial sounds in `react-three-fiber`, you'll have to synchronize it with the engine and the camera you have. Use `<AudioListenerSync>` as convenience component inside your `<Canvas>` so panners hear from the camera's point of view:
 
 ```tsx
 import { AudioListenerSync } from "@webgamedevkit/audio-engine/r3f";
@@ -198,7 +198,7 @@ const PROCEDURAL_SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
 
 const { play } = useSpatialAudioEngine({
   soundConfigs: PROCEDURAL_SOUND_CONFIGS,
-  audioStore: useAudioStore,
+  volumeStore: volumeStore,
   resolveBuffer: async (ctx, event) => {
     if (event !== "synth_click") return null;
 
