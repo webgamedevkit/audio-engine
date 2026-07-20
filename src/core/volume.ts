@@ -22,12 +22,12 @@ export const toVolumeState = <TCategory extends string>(
 /**
  * Computes the effective category gain multiplier from a {@link VolumeState}.
  *
- * Formula: `(masterVolume * categoryVolume) / (MAX_VOLUME * 10)` when not muted;
- * returns {@link MIN_VOLUME} when muted.
+ * Formula: `(masterVolume / MAX_VOLUME) * (categoryVolume / MAX_VOLUME)` when not
+ * muted; returns {@link MIN_VOLUME} when muted.
  *
  * @param state - Current master / category / mute snapshot.
  * @param category - Which category channel to read.
- * @returns Multiplier typically in about `0`–`1` range for gain nodes.
+ * @returns Linear gain multiplier in the `0`–`1` range for gain nodes.
  */
 export const getCategoryVolume = <TCategory extends string>(
   state: VolumeState<TCategory>,
@@ -39,5 +39,5 @@ export const getCategoryVolume = <TCategory extends string>(
 
   const categoryVol = state.categoryVolumes[category];
 
-  return (state.masterVolume * categoryVol) / (MAX_VOLUME * 10);
+  return (state.masterVolume * categoryVol) / (MAX_VOLUME * MAX_VOLUME);
 };

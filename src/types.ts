@@ -49,6 +49,12 @@ export type SoundConfigShape<TCategory extends string = string> = {
    * (e.g. `0.05` → about `0.95`–`1.05`).
    */
   pitchSpread?: number;
+  /**
+   * When `true`, peak-normalize playback gain to −1 dBFS.
+   * Pass `{ targetPeak }` for a custom linear peak in `(0, 1]`.
+   * File-backed assets only; ignored for `resolveBuffer` / procedural sounds.
+   */
+  normalize?: boolean | { targetPeak: number };
 };
 
 /**

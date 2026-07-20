@@ -8,10 +8,11 @@ type TestEvents = "explosion" | "tower_shot";
 const soundConfigs = defineSoundConfigs(
   AUDIO_CATEGORIES,
   {
-    explosion: { category: "sfx", src: "/boom.wav" },
+    explosion: { category: "sfx", src: "/boom.wav", normalize: true },
     tower_shot: {
       category: "sfx",
       srces: { cannon: "/c.wav", laser: "/l.wav" },
+      normalize: { targetPeak: 0.5 },
     },
   },
   forEvents<TestEvents>(),

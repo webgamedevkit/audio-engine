@@ -20,79 +20,98 @@ npm install react @react-three/fiber three
 
 ### 1. Define a volume store
 
-It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle
+It provides you the volume values to control the categories you assigned plus the master volume value and mute toggle:
 
 ```ts
+// .../stores/volumeStore.ts
+
 import {
   createAudioVolumeStore,
   localStoragePersist,
 } from "@webgamedevkit/audio-engine/stores";
 
-// List of categories you want to have a separate volume value
-const AUDIO_CATEGORIES = ["sfx", "music"] as const; 
+// List of categories you want to have a separate volume value for
+export const AUDIO_CATEGORIES = ["sfx", "music"] as const; 
 
-export const useAudioStore = createAudioVolumeStore({
+export const volumeStore = createAudioVolumeStore({
   categories: AUDIO_CATEGORIES,
   // Saves values to localStorage
-  persist: localStoragePersist("my-app-audio-settings"), 
+  persist: localStoragePersist("my-app-audio-settings"),
   defaultCategoryVolumes: { sfx: 50, music: 50 },
 });
 ```
 
 ### 2. Sound configs
 
-Declare audio assets directly on each sound config. 
+Declare audio assets directly on each sound config. Each sound corresponds to game event you provided so you won't leave any of your events w/o a sound:
 
 ```ts
-import { defineSoundConfigs, forEvents } from "@webgamedevkit/audio-engine";
+// .../constants/audio.ts
 
-type GameEvent = "explosion" | "ui_click";
+import { defineSoundConfigs } from "@webgamedevkit/audio-engine";
+import { AUDIO_CATEGORIES } from "../stores/volumeStore"
 
-export const SOUND_CONFIGS = defineSoundConfigs(
+// Provide your in-game events
+type GameEvent = "explosion" | "ui_click" | "game_start";
+
+export const SOUND_CONFIGS = defineSoundConfigs<GameEvent>(
   AUDIO_CATEGORIES,
   {
     explosion: {
+      // Fully typed categories --> "sfx" | "music"
       category: "sfx",
       src: "assets/explosion.wav",
     },
     ui_click: {
       category: "sfx",
+      // Configure if this sound should be spatial
       spatial: false,
       src: "assets/click.wav",
     },
+    game_start: {
+      category: "music",
+      spatial: false,
+      // You can specify multiple sources
+      srces: {
+        episode_1: "assets/main_theme.wav",
+        episode_2: "assets/main_theme_alt.wav",
+      },
+    }
   },
-  forEvents<GameEvent>()
 );
 ```
 
-### 3. React hook
+### 3. Usage in React
+
+For React you can use a helper hook called `useSpatialAudioEngine`. It provides a simple type-safe API for you to play sounds:
 
 ```tsx
 import { useSpatialAudioEngine } from "@webgamedevkit/audio-engine/react";
+import { volumeStore } from "../stores/volumeStore"
+import { SOUND_CONFIGS } from "../constants/audio";
 
-const { play, preload, isReady } = useSpatialAudioEngine({
+const { play, isReady } = useSpatialAudioEngine({
+  volumeStore: volumeStore,
   soundConfigs: SOUND_CONFIGS,
-  volumeStore: useAudioStore,
   // A common callback for handling errors
   onLoadError: console.warn,
 });
 
-// Optional: warm caches on a loading screen
-await preload(["explosion"]);
-// or `await preload()` to preload every configured asset
-
-// Spatial SFX at a world point
-await play("explosion", { worldPosition: { x: 10, y: 0, z: 5 } });
-
-// Non-spatial UI sound
+// ... Somewhere later ...
 await play("ui_click");
+
+await play(
+  "explosion", 
+  // Provide position for spatial sound
+  { worldPosition: { x: 10, y: 0, z: 5 } } 
+);
 ```
 
 The hook creates an `AudioContext`, resumes it on the first user click / keydown / touch, and reapplies volumes whenever the store changes. `isReady` is `true` once the context is activated.
 
-### 4. R3F listener (for spatial sounds)
+### 4. Synchronization with React Three Fiber
 
-Mount inside your `<Canvas>` so panners hear from the camera's point of view:
+In order for you to play spatial sounds in `react-three-fiber`, you'll have to synchronize it with the engine and the camera you have. Use `<AudioListenerSync>` as convenience component inside your `<Canvas>` so panners hear from the camera's point of view:
 
 ```tsx
 import { AudioListenerSync } from "@webgamedevkit/audio-engine/r3f";
@@ -124,7 +143,49 @@ await play("tower_shot", {
 });
 ```
 
-## Advanced: procedural sounds
+## Advanced
+
+Optional patterns for less common setups.
+
+### Peak gain normalization
+
+Use `normalize` on file-backed configs to level inconsistent one-shot SFX without re-encoding or duplicating buffers. Skip it for music and long ambience loops — normalize those offline instead.
+
+```ts
+export const SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
+  footstep: {
+    category: "sfx",
+    src: "assets/footstep.wav",
+    normalize: true, // default target: −1 dBFS
+  },
+  ui_tick: {
+    category: "sfx",
+    spatial: false,
+    src: "assets/tick.wav",
+    normalize: { targetPeak: 0.5 }, // custom linear peak in (0, 1]
+  },
+});
+```
+
+On first use, the engine scans the decoded `AudioBuffer` for the absolute peak across all channels and caches it. For finite, nonzero peaks, playback gain is multiplied by `targetPeak / measuredPeak` (quiet clips boosted, hot clips attenuated). Silent or invalid decoded buffers, where the measured peak is zero or non-finite, use unity gain instead. The decoded buffer is shared; only the gain differs per config/play.
+
+Effective gain at play time: `(master / 100) × (category / 100) × normalizationGain`. `preload()` warms the peak cache when any config for that URL opts in, so the first gameplay `play` does not hitch.
+
+| Config A | Config B | Peak scan | Playback gain |
+|----------|----------|-----------|---------------|
+| `normalize: true` | omitted | 1× (if A preloads/plays) | A scaled, B unity |
+| `normalize: true` | `{ targetPeak: 0.5 }` | 1× | different gains, same peak |
+| both omitted | — | 0× | both unity |
+
+**Limitations:**
+
+- **Peak ≠ loudness** — two sounds at the same peak can still feel very different; prefer offline LUFS for authored packs.
+- **Boost side effects** — quiet assets get amplified (noise floor, hiss); overlapping boosted one-shots can clip; this is not a master limiter.
+- **Main-thread cost** — peak scan is O(samples × channels) and synchronous; fine for short SFX, avoid on long loops.
+- **Scope** — file-backed `src` / `srces` only; ignored for `resolveBuffer` / procedural sounds.
+- **Not a substitute** for per-sound mix gain or bus compression/limiting.
+
+### Procedural sounds
 
 For synthetic or runtime-generated buffers, provide an optional `resolveBuffer` override. The engine uses it only for events without `src` / `srces`.
 
@@ -137,7 +198,7 @@ const PROCEDURAL_SOUND_CONFIGS = defineSoundConfigs(AUDIO_CATEGORIES, {
 
 const { play } = useSpatialAudioEngine({
   soundConfigs: PROCEDURAL_SOUND_CONFIGS,
-  volumeStore: useAudioStore,
+  volumeStore: volumeStore,
   resolveBuffer: async (ctx, event) => {
     if (event !== "synth_click") return null;
 
@@ -153,11 +214,11 @@ const { play } = useSpatialAudioEngine({
 });
 ```
 
-## Custom persistence / save files
+### Custom persistence / save files
 
 Persistence is optional. Omit `persist` for an in-memory store, or supply your own load/save logic.
 
-### Built-in storage wrappers
+#### Built-in storage wrappers
 
 ```ts
 import {
@@ -175,12 +236,15 @@ createAudioVolumeStore({
 });
 ```
 
-### Custom `{ key, load, save }` (e.g. game save slot)
+#### Custom `{ key, load, save }` (e.g. game save slot)
 
 Your callbacks own where data lives. The store auto-saves on every volume/mute change:
 
 ```ts
-import type { VolumePersistedState } from "@webgamedevkit/audio-engine/stores";
+import {
+  createAudioVolumeStore,
+  type VolumePersistedState,
+} from "@webgamedevkit/audio-engine/stores";
 
 type AudioCategory = (typeof AUDIO_CATEGORIES)[number];
 
@@ -202,7 +266,7 @@ saveData.audio = loadedSave.audio;
 await useAudioStore.persist.rehydrate();
 ```
 
-### Manual serialize / hydrate (no auto-save)
+#### Manual serialize / hydrate (no auto-save)
 
 When you only want to read/write volumes during explicit save/load:
 
@@ -242,8 +306,9 @@ hydrateVolumeStore(
 
 - **Internal loading** — File-backed sounds load from `src` / `srces` on the config. Buffers are cached and deduplicated across concurrent requests.
 - **Spatial vs non-spatial** — A sound is spatial when `config.spatial !== false` and `data.worldPosition` is present. Otherwise it plays flat (a warning is logged if spatial was expected but position is missing).
-- **Live volume** — Changing master, category, or mute in the store updates gain on all currently playing sounds.
+- **Live volume** — Changing master, category, or mute in the store updates gain on all currently playing sounds. Store values use a `0`–`100` scale; effective gain is `(master / 100) × (category / 100)`, so defaults of `50`/`50` produce `0.25` linear gain and `100`/`100` produces unity (`1.0`).
 - **Pitch variation** — One-shots get a random `playbackRate` unless `pitchVariation: false` or `loop: true`.
+- **Peak normalization** — Opt-in `normalize` on file-backed configs scales playback gain from a cached peak scan (default −1 dBFS). This is not loudness matching or a limiter; best for short SFX, not long music loops.
 - **Without React** — Instantiate `SpatialAudioEngine` directly, call `setActivated(true)` after a user gesture, and manage the `AudioContext` yourself.
 
 ## Development

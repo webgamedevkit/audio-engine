@@ -161,4 +161,44 @@ describe("assetResolver", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it("preload warms peak cache when any config opts into normalization", async () => {
+    const getChannelData = vi.fn(() => new Float32Array([0.8]));
+    const audioContext = {
+      decodeAudioData: vi.fn(async () => ({
+        duration: 0.1,
+        length: 1,
+        numberOfChannels: 1,
+        sampleRate: 44100,
+        getChannelData,
+      })),
+    } as unknown as AudioContext;
+
+    const fetchMock = vi.fn(async () => ({
+      arrayBuffer: async () => new ArrayBuffer(8),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const configs = {
+      normalized: {
+        category: "sfx",
+        src: "/shared.wav",
+        normalize: true,
+      },
+      raw: {
+        category: "sfx",
+        src: "/shared.wav",
+      },
+    } satisfies Record<string, SoundConfig>;
+
+    await preloadSoundConfigs(
+      audioContext,
+      configs,
+      ["normalized", "raw"],
+      undefined
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getChannelData).toHaveBeenCalled();
+  });
 });

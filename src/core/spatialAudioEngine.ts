@@ -7,6 +7,7 @@ import type {
   WorldPosition,
 } from "../types";
 import { preloadSoundConfigs, resolveSoundBuffer } from "./assetResolver";
+import { getNormalizationGainForConfig } from "./peakNormalization";
 import { getCategoryVolume, toVolumeState } from "./volume";
 
 /** Default half-range for randomized playback rate when config omits `pitchSpread`. */
@@ -65,6 +66,8 @@ type PlayingSound<TCategory extends string> = {
   panner?: PannerNode;
   /** Category used when recomputing gain from {@link VolumeState}. */
   category: TCategory;
+  /** Per-play normalization multiplier; preserved across live volume updates. */
+  normalizationGain: number;
 };
 
 /**
@@ -239,7 +242,8 @@ export class SpatialAudioEngine<
         toVolumeState(this.getVolumeState()),
         config.category
       );
-      gainNode.gain.value = categoryVolume;
+      const normalizationGain = getNormalizationGainForConfig(buffer, config);
+      gainNode.gain.value = categoryVolume * normalizationGain;
 
       const worldPos = getWorldPositionFromPayload(data);
       const useSpatial = config.spatial !== false && worldPos !== null;
@@ -281,6 +285,7 @@ export class SpatialAudioEngine<
         gainNode,
         panner,
         category: config.category,
+        normalizationGain,
       });
 
       source.onended = () => {
@@ -310,7 +315,7 @@ export class SpatialAudioEngine<
 
     this.playingSounds.forEach((sound) => {
       const categoryVolume = getCategoryVolume(volumeState, sound.category);
-      sound.gainNode.gain.value = categoryVolume;
+      sound.gainNode.gain.value = categoryVolume * sound.normalizationGain;
     });
   };
 
